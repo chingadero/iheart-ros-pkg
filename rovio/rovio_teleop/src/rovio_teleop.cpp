@@ -33,6 +33,10 @@ private:
   
   ros::NodeHandle nh_;
 
+  int linearx_, lineary_, angular_;
+  int head_down_, head_mid_, head_up_;
+  double lx_scale_, ly_scale_, a_scale_;
+
   ros::Publisher vel_pub_;
   ros::Subscriber joy_sub_;
   geometry_msgs::Twist cmd;
@@ -41,8 +45,41 @@ private:
   rovio_common::Head head_srv_;
 };
 
-TeleopRovio::TeleopRovio(void)
+TeleopRovio::TeleopRovio(void):
+  linearx_ (1),
+  lineary_ (0),
+  angular_ (2),
+  lx_scale_ (1.0),
+  ly_scale_ (-1.0),
+  a_scale_ (-1.0),
+  head_down_ (1),
+  head_mid_ (2),
+  head_up_ (3)
 {
+
+  // adjust axes, scale and buttons from parameters
+  ros::NodeHandle nh_param("~");
+  nh_param.param<int>("axis_linearx", linearx_, linearx_);
+  nh_param.param<int>("axis_lineary", lineary_, lineary_);
+  nh_param.param<int>("axis_angular", angular_, angular_);
+  nh_param.param<double>("scale_linearx", lx_scale_, lx_scale_);
+  nh_param.param<double>("scale_lineary", ly_scale_, ly_scale_);
+  nh_param.param<double>("scale_angular", a_scale_, a_scale_);
+
+  nh_param.param<int>("button_head_down", head_down_, head_down_);
+  nh_param.param<int>("button_head_mid", head_mid_, head_mid_);
+  nh_param.param<int>("button_head_up", head_up_, head_up_);
+
+  ROS_DEBUG("axis_linearx: %d", (int)linearx_);
+  ROS_DEBUG("axis_lineary: %d", (int)lineary_);
+  ROS_DEBUG("axis_angular: %d", (int)angular_);
+  ROS_DEBUG("scale_linearx: %0.2f", (double)lx_scale_);
+  ROS_DEBUG("scale_lineary: %0.2f", (double)ly_scale_);
+  ROS_DEBUG("scale_angular: %0.2f", (double)a_scale_);
+  ROS_DEBUG("button_head_down: %d", (int)head_down_);
+  ROS_DEBUG("button_head_mid: %d", (int)head_mid_);
+  ROS_DEBUG("button_head_up: %d", (int)head_up_);
+
   // Right hand co-ordinate system
   // X+ is Forward
   // Y+ is Right
@@ -63,17 +100,16 @@ TeleopRovio::TeleopRovio(void)
 
 void TeleopRovio::joyCallback(const joy::Joy::ConstPtr& joy)
 {
-  // FIXME: Make axes & buttons configuarable via parameters
-  cmd.linear.x = joy->axes[1];
-  cmd.linear.y = joy->axes[0] * -1;
+  cmd.linear.x = joy->axes[linearx_] * lx_scale_;
+  cmd.linear.y = joy->axes[lineary_] * ly_scale_;
   cmd.linear.z = 0;
   cmd.angular.x = 0;
   cmd.angular.y = 0;
-  cmd.angular.z = joy->axes[2] * -1;
+  cmd.angular.z = joy->axes[angular_] * a_scale_;
   vel_pub_.publish(cmd);
 
   // FIXME: Add E-Stop
-  if (joy->buttons[1] == 1)
+  if (joy->buttons[head_down_] == 1)
   {
     head_srv_.request.position = rovio_common::Head::Request::DOWN;
     if (head_client_.call(head_srv_))
@@ -86,7 +122,7 @@ void TeleopRovio::joyCallback(const joy::Joy::ConstPtr& joy)
       ROS_ERROR("Failed to call service head_position");
     }
   }
-  else if (joy->buttons[2] == 1)
+  else if (joy->buttons[head_mid_] == 1)
   {
     head_srv_.request.position = rovio_common::Head::Request::MID;
     if (head_client_.call(head_srv_))
@@ -98,7 +134,7 @@ void TeleopRovio::joyCallback(const joy::Joy::ConstPtr& joy)
       ROS_ERROR("Failed to call service head_position");
     }
   }
-  else if (joy->buttons[3] == 1)
+  else if (joy->buttons[head_up_] == 1)
   {
     head_srv_.request.position = rovio_common::Head::Request::UP;
     if (head_client_.call(head_srv_))
